@@ -8,6 +8,7 @@ import {
     RiCalendarLine
 } from "react-icons/ri"
 
+// helper format rupiah
 const formatRupiah = (amount) => {
     return new Intl.NumberFormat('id-ID', {
         style: 'currency',
@@ -16,6 +17,7 @@ const formatRupiah = (amount) => {
     }).format(amount)
 }
 
+// daftar opsi periode yang muncul di dropdown
 const PERIOD_OPTIONS = [
     { label: 'Bulan Ini', value: 'thisMonth' },
     { label: 'Bulan Lalu', value: 'lastMonth' },
@@ -24,6 +26,7 @@ const PERIOD_OPTIONS = [
     { label: 'Semua', value: 'all' },
 ]
 
+// konversi nama periode ke range tanggal start & end
 const getPeriodDates = (period) => {
     const now = dayjs()
     switch (period) {
@@ -40,35 +43,39 @@ const getPeriodDates = (period) => {
             return { start: now.startOf('year').format('YYYY-MM-DD'), end: now.endOf('year').format('YYYY-MM-DD') }
         case 'all':
         default:
+            // kalau "Semua", ga kasih filter tanggal
             return { start: '', end: '' }
     }
 }
 
 const Histori = () => {
-    const [transactions, setTransactions] = useState([])
-    const [summary, setSummary] = useState({ income: 0, expense: 0, transfer: 0 })
+    const [transactions, setTransactions] = useState([])     // data yang tampil di tabel (dipaginasi)
+    const [summary, setSummary] = useState({ income: 0, expense: 0 }) // total income & expense periode ini
     const [wallets, setWallets] = useState([])
     const [categories, setCategories] = useState([])
     const [loading, setLoading] = useState(true)
     const [pagination, setPagination] = useState({})
 
+    // state filter
     const [filter, setFilter] = useState({
-        type: '',
+        type: '',         // filter tipe transaksi (kosong = semua)
         wallet_id: '',
         category_id: '',
-        search: '',
         period: 'thisMonth',
         page: 1,
         limit: 10,
     })
 
-    const [activeType, setActiveType] = useState('all') // 'all' | 'income' | 'expense' | 'transfer'
+    const [activeType, setActiveType] = useState('all') // untuk warna tab aktif
 
+    // fetch data transaksi sesuai filter yang aktif
     const fetchHistory = useCallback(async () => {
         setLoading(true)
         try {
             const { start, end } = getPeriodDates(filter.period)
             const params = new URLSearchParams()
+
+            // cuma append kalau filternya aktif
             if (filter.type) params.append('type', filter.type)
             if (filter.wallet_id) params.append('wallet_id', filter.wallet_id)
             if (filter.category_id) params.append('category_id', filter.category_id)
@@ -82,12 +89,13 @@ const Histori = () => {
             setTransactions(data.data)
             setPagination(data.pagination)
 
-            // hitung summary dari semua data (bukan hanya halaman ini)
+            // fetch semua data (limit=9999) untuk hitung summary card yang akurat
+            // ini terpisah dari data tabel supaya summary ga ikut dipaginasi
             const sumRes = await api.get(`/transactions?${params.toString()}&limit=9999&page=1`)
             const allData = sumRes.data.data.data
             const inc = allData.filter(t => t.type === 'income').reduce((s, t) => s + parseFloat(t.amount), 0)
             const exp = allData.filter(t => t.type === 'expense').reduce((s, t) => s + parseFloat(t.amount), 0)
-            setSummary({ income: inc, expense: exp, transfer: 0 })
+            setSummary({ income: inc, expense: exp })
         } catch (error) {
             toast.error('Gagal memuat histori')
         } finally {
@@ -95,22 +103,27 @@ const Histori = () => {
         }
     }, [filter])
 
+    // fetch data dropdown filter (wallet & kategori)
     const fetchFormData = async () => {
         try {
+            // parallel request biar lebih cepat
             const [wRes, cRes] = await Promise.all([api.get('/wallets'), api.get('/categories')])
             setWallets(wRes.data.data)
             setCategories(cRes.data.data)
         } catch (_) {}
     }
 
+    // fetchHistory jalan setiap kali filter berubah (lewat useCallback dependency)
     useEffect(() => {
         fetchHistory()
     }, [fetchHistory])
 
+    // fetchFormData cukup sekali saat mount
     useEffect(() => {
         fetchFormData()
     }, [])
 
+    // saat ganti tab tipe, update filter.type dan reset ke halaman 1
     const handleTypeTab = (type) => {
         setActiveType(type)
         setFilter(prev => ({
@@ -120,10 +133,12 @@ const Histori = () => {
         }))
     }
 
+    // handler filter umum, pake prev state biar aman
     const handleFilterChange = (e) => {
         setFilter(prev => ({ ...prev, [e.target.name]: e.target.value, page: 1 }))
     }
 
+    // konfigurasi visual per tipe transaksi — dipake di setiap baris tabel
     const typeConfig = {
         income: { label: 'Pemasukan', icon: RiArrowUpCircleLine, color: 'text-green-500', bg: 'bg-green-50' },
         expense: { label: 'Pengeluaran', icon: RiArrowDownCircleLine, color: 'text-red-500', bg: 'bg-red-50' },
@@ -140,7 +155,7 @@ const Histori = () => {
                 </div>
             </div>
 
-            {/* summary cards */}
+            {/* summary cards — nilai dihitung dari allData bukan data yang dipaginasi */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-50 flex items-center gap-4">
                     <div className="w-10 h-10 bg-green-50 rounded-xl flex items-center justify-center">
@@ -160,6 +175,7 @@ const Histori = () => {
                         <p className="font-bold text-red-500 text-lg">{formatRupiah(summary.expense)}</p>
                     </div>
                 </div>
+                {/* warna selisih ikut positif/negatif */}
                 <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-50 flex items-center gap-4">
                     <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
                         <RiArrowLeftRightLine size={22} className="text-blue-500" />
@@ -173,9 +189,9 @@ const Histori = () => {
                 </div>
             </div>
 
-            {/* filter bar */}
+            {/* filter bar — tab tipe + dropdown periode + dropdown wallet & kategori + reset */}
             <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-50 space-y-3">
-                {/* tab type */}
+                {/* baris atas: tab tipe + periode */}
                 <div className="flex items-center gap-2 flex-wrap">
                     {['all', 'income', 'expense'].map(t => (
                         <button
@@ -195,6 +211,7 @@ const Histori = () => {
                         </button>
                     ))}
 
+                    {/* dropdown periode di sebelah kanan tab */}
                     <div className="ml-auto flex items-center gap-2">
                         <RiCalendarLine size={14} className="text-gray-400" />
                         <select
@@ -210,7 +227,7 @@ const Histori = () => {
                     </div>
                 </div>
 
-                {/* filter row 2 */}
+                {/* baris bawah: filter wallet, kategori, dan tombol reset */}
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                     <select
                         name="wallet_id"
@@ -232,9 +249,10 @@ const Histori = () => {
                         {categories.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
                     </select>
 
+                    {/* tombol reset — kembalikan semua filter ke default */}
                     <button
                         onClick={() => {
-                            setFilter({ type: '', wallet_id: '', category_id: '', search: '', period: 'thisMonth', page: 1, limit: 10 })
+                            setFilter({ type: '', wallet_id: '', category_id: '', period: 'thisMonth', page: 1, limit: 10 })
                             setActiveType('all')
                         }}
                         className="border border-gray-200 text-gray-500 rounded-xl px-3 py-2 text-sm hover:bg-gray-50 transition-colors flex items-center justify-center gap-1"
@@ -245,7 +263,7 @@ const Histori = () => {
                 </div>
             </div>
 
-            {/* tabel transaksi */}
+            {/* tabel histori transaksi */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-50 overflow-hidden">
                 {loading ? (
                     <div className="flex items-center justify-center h-48">
@@ -272,16 +290,19 @@ const Histori = () => {
                             </thead>
                             <tbody className="divide-y divide-gray-50">
                                 {transactions.map((trx) => {
+                                    // ambil konfigurasi visual dari typeConfig, fallback ke expense
                                     const cfg = typeConfig[trx.type] || typeConfig.expense
                                     const Icon = cfg.icon
                                     return (
                                         <tr key={trx.id} className="hover:bg-gray-50 transition-colors">
                                             <td className="px-5 py-3.5">
                                                 <div className="flex items-center gap-3">
+                                                    {/* ikon di kotak berwarna sesuai tipe */}
                                                     <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${cfg.bg}`}>
                                                         <Icon size={18} className={cfg.color} />
                                                     </div>
                                                     <div>
+                                                        {/* prioritaskan description, fallback nama kategori */}
                                                         <p className="text-sm font-medium text-gray-700">
                                                             {trx.description || trx.category?.name || '-'}
                                                         </p>
@@ -304,6 +325,7 @@ const Histori = () => {
                                                     <p className={`text-sm font-bold ${trx.type === 'income' ? 'text-green-500' : 'text-red-500'}`}>
                                                         {trx.type === 'income' ? '+' : '-'}{formatRupiah(trx.amount)}
                                                     </p>
+                                                    {/* badge tipe */}
                                                     <span className={`text-xs px-2 py-0.5 rounded-full ${
                                                         trx.type === 'income'
                                                             ? 'bg-green-100 text-green-600'
@@ -319,7 +341,7 @@ const Histori = () => {
                             </tbody>
                         </table>
 
-                        {/* pagination */}
+                        {/* pagination windowed — cuma tampil halaman yang dekat dengan aktif (±2) */}
                         <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100">
                             <p className="text-xs text-gray-400">
                                 Menampilkan {(filter.page - 1) * filter.limit + 1}–{Math.min(filter.page * filter.limit, pagination.total_data)} dari {pagination.total_data} transaksi

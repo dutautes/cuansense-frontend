@@ -4,6 +4,7 @@ import Modal from "../components/Modal"
 import toast from "react-hot-toast"
 import { RiAddLine, RiEditLine, RiDeleteBin6Line, RiWalletLine } from "react-icons/ri"
 
+// helper format rupiah, konsisten dipake di seluruh file
 const formatRupiah = (amount) => {
     return new Intl.NumberFormat('id-ID', {
         style: 'currency',
@@ -12,7 +13,7 @@ const formatRupiah = (amount) => {
     }).format(amount)
 }
 
-// palet warna yang bisa dipilih user
+// palet warna yang bisa dipilih user untuk tampilan wallet card
 const COLOR_OPTIONS = [
     { label: 'Hijau', value: '#22c55e' },
     { label: 'Biru', value: '#3b82f6' },
@@ -30,12 +31,15 @@ const Wallet = () => {
     const [modalOpen, setModalOpen] = useState(false)
     const [editModalOpen, setEditModalOpen] = useState(false)
     const [deleteModalOpen, setDeleteModalOpen] = useState(false)
-    const [selectedWallet, setSelectedWallet] = useState(null)
+    const [selectedWallet, setSelectedWallet] = useState(null) // wallet yang lagi dipilih untuk edit/hapus
     const [submitLoading, setSubmitLoading] = useState(false)
 
+    // form tambah wallet — default warna hijau
     const [form, setForm] = useState({ name: '', balance: '', color: '#22c55e' })
+    // form edit wallet — diisi dari data wallet yang dipilih
     const [editForm, setEditForm] = useState({ name: '', color: '#22c55e' })
 
+    // fetch semua wallet user
     const fetchWallets = async () => {
         setLoading(true)
         try {
@@ -48,10 +52,12 @@ const Wallet = () => {
         }
     }
 
+    // jalanin sekali waktu komponen pertama mount
     useEffect(() => {
         fetchWallets()
     }, [])
 
+    // generic handler form pake computed property [name] biar fleksibel
     const handleFormChange = (e) => setForm({ ...form, [e.target.name]: e.target.value })
     const handleEditFormChange = (e) => setEditForm({ ...editForm, [e.target.name]: e.target.value })
 
@@ -65,12 +71,12 @@ const Wallet = () => {
         try {
             await api.post('/wallets', {
                 name: form.name,
-                balance: Number(form.balance) || 0,
+                balance: Number(form.balance) || 0, // kalau kosong, default ke 0
                 color: form.color,
             })
             toast.success('Wallet berhasil dibuat!')
             setModalOpen(false)
-            setForm({ name: '', balance: '', color: '#22c55e' })
+            setForm({ name: '', balance: '', color: '#22c55e' }) // reset ke default
             fetchWallets()
         } catch (error) {
             toast.error(error.response?.data?.data || 'Gagal membuat wallet')
@@ -87,6 +93,7 @@ const Wallet = () => {
         }
         setSubmitLoading(true)
         try {
+            // edit cuma kirim name & color, saldo ga bisa diubah langsung lewat sini
             await api.put(`/wallets/${selectedWallet.id}`, {
                 name: editForm.name,
                 color: editForm.color,
@@ -106,19 +113,21 @@ const Wallet = () => {
             await api.delete(`/wallets/${selectedWallet.id}`)
             toast.success('Wallet berhasil dihapus!')
             setDeleteModalOpen(false)
-            setSelectedWallet(null)
+            setSelectedWallet(null) // bersihkan seleksi setelah hapus
             fetchWallets()
         } catch (error) {
             toast.error('Gagal menghapus wallet')
         }
     }
 
+    // buka modal edit dan isi editForm dengan data wallet yang dipilih
     const openEditModal = (wallet) => {
         setSelectedWallet(wallet)
         setEditForm({ name: wallet.name, color: wallet.color || '#22c55e' })
         setEditModalOpen(true)
     }
 
+    // hitung total saldo dari semua wallet pakai reduce
     const totalBalance = wallets.reduce((sum, w) => sum + parseFloat(w.balance || 0), 0)
 
     return (
@@ -139,7 +148,7 @@ const Wallet = () => {
                 </button>
             </div>
 
-            {/* total balance card */}
+            {/* total balance card — hanya muncul kalau ada wallet dan data sudah selesai dimuat */}
             {!loading && wallets.length > 0 && (
                 <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-2xl p-6 text-white shadow-lg">
                     <p className="text-green-100 text-sm font-medium">Total Saldo Semua Wallet</p>
@@ -148,7 +157,7 @@ const Wallet = () => {
                 </div>
             )}
 
-            {/* wallet cards */}
+            {/* grid wallet — 3 kondisi: loading, kosong, atau ada data */}
             {loading ? (
                 <div className="flex items-center justify-center h-48">
                     <div className="flex flex-col items-center gap-2">
@@ -174,7 +183,7 @@ const Wallet = () => {
                             key={wallet.id}
                             className="bg-white rounded-2xl p-5 shadow-sm border border-gray-50 hover:shadow-md transition-shadow relative overflow-hidden"
                         >
-                            {/* accent strip warna wallet */}
+                            {/* accent strip warna di bagian atas card */}
                             <div
                                 className="absolute top-0 left-0 right-0 h-1 rounded-t-2xl"
                                 style={{ backgroundColor: wallet.color || '#22c55e' }}
@@ -182,6 +191,7 @@ const Wallet = () => {
 
                             <div className="flex items-start justify-between mt-1">
                                 <div className="flex items-center gap-3">
+                                    {/* kotak warna dengan inisial nama wallet */}
                                     <div
                                         className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-sm shadow-sm"
                                         style={{ backgroundColor: wallet.color || '#22c55e' }}
@@ -194,6 +204,7 @@ const Wallet = () => {
                                     </div>
                                 </div>
 
+                                {/* tombol edit & hapus di kanan atas card */}
                                 <div className="flex items-center gap-1">
                                     <button
                                         onClick={() => openEditModal(wallet)}
@@ -213,6 +224,7 @@ const Wallet = () => {
                                 </div>
                             </div>
 
+                            {/* saldo wallet */}
                             <div className="mt-4">
                                 <p className="text-xs text-gray-400 mb-0.5">Saldo</p>
                                 <p className="text-xl font-bold text-gray-800">{formatRupiah(wallet.balance)}</p>
@@ -254,12 +266,14 @@ const Wallet = () => {
 
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">Warna</label>
+                        {/* color picker berbentuk bulat-bulat kecil */}
                         <div className="flex flex-wrap gap-2">
                             {COLOR_OPTIONS.map(c => (
                                 <button
                                     key={c.value}
                                     type="button"
                                     onClick={() => setForm({ ...form, color: c.value })}
+                                    // ring muncul kalau warna ini yang aktif dipilih
                                     className={`w-8 h-8 rounded-lg transition-transform hover:scale-110 ${form.color === c.value ? 'ring-2 ring-offset-2 ring-gray-400 scale-110' : ''}`}
                                     style={{ backgroundColor: c.value }}
                                     title={c.label}
@@ -278,7 +292,7 @@ const Wallet = () => {
                 </form>
             </Modal>
 
-            {/* modal edit wallet */}
+            {/* modal edit wallet — form terpisah dari tambah biar ga tabrakan state */}
             <Modal isOpen={editModalOpen} onClose={() => setEditModalOpen(false)} title="Edit Wallet">
                 <form onSubmit={handleEditSubmit} className="space-y-4">
 
@@ -307,6 +321,7 @@ const Wallet = () => {
                                 />
                             ))}
                         </div>
+                        {/* kasih info ke user kalau saldo ga bisa diubah langsung */}
                         <p className="text-xs text-gray-400 mt-2">* Saldo wallet tidak bisa diubah langsung. Gunakan transaksi atau transfer.</p>
                     </div>
 
@@ -320,7 +335,7 @@ const Wallet = () => {
                 </form>
             </Modal>
 
-            {/* modal konfirmasi delete */}
+            {/* modal konfirmasi hapus — tampilkan nama wallet biar user yakin */}
             <Modal isOpen={deleteModalOpen} onClose={() => setDeleteModalOpen(false)} title="Hapus Wallet">
                 <div className="text-center space-y-4">
                     <p className="text-gray-600 text-sm">

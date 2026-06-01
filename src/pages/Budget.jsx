@@ -8,6 +8,7 @@ import {
     RiDeleteBin6Line, RiAlertLine, RiCheckLine
 } from "react-icons/ri"
 
+// helper format rupiah, konsisten dipake di seluruh file
 const formatRupiah = (amount) => {
     return new Intl.NumberFormat('id-ID', {
         style: 'currency',
@@ -16,24 +17,28 @@ const formatRupiah = (amount) => {
     }).format(amount)
 }
 
+// nama bulan dalam bahasa Indonesia, diakses lewat index (0-based)
 const MONTHS = [
     'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
     'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
 ]
 
 const Budget = () => {
-    const [budgets, setBudgets] = useState([])
-    const [currentBudget, setCurrentBudget] = useState(null)
+    const [budgets, setBudgets] = useState([])        // semua budget user
+    const [currentBudget, setCurrentBudget] = useState(null) // budget bulan ini
     const [loading, setLoading] = useState(true)
     const [modalOpen, setModalOpen] = useState(false)
     const [editModalOpen, setEditModalOpen] = useState(false)
     const [deleteModalOpen, setDeleteModalOpen] = useState(false)
-    const [selectedBudget, setSelectedBudget] = useState(null)
+    const [selectedBudget, setSelectedBudget] = useState(null) // budget yang lagi dipilih
     const [submitLoading, setSubmitLoading] = useState(false)
 
+    // ambil tanggal sekarang sekali, dipakai berkali-kali di bawah
     const now = dayjs()
+
+    // form tambah budget — default ke bulan & tahun sekarang
     const [form, setForm] = useState({
-        month: now.month() + 1,
+        month: now.month() + 1, // dayjs month 0-indexed, makanya +1
         year: now.year(),
         limit_amount: '',
     })
@@ -42,11 +47,14 @@ const Budget = () => {
     const fetchBudgets = async () => {
         setLoading(true)
         try {
+            // fetch semua budget & budget bulan ini sekaligus biar lebih efisien
             const [allRes, currentRes] = await Promise.all([
                 api.get('/budgets'),
+                // .catch(() => null) biar ga crash kalau bulan ini belum ada budget-nya
                 api.get(`/budgets/detail?month=${now.month() + 1}&year=${now.year()}`).catch(() => null)
             ])
             setBudgets(allRes.data.data)
+            // kalau endpoint detail return null (404), set currentBudget ke null
             if (currentRes) setCurrentBudget(currentRes.data.data)
             else setCurrentBudget(null)
         } catch (error) {
@@ -56,6 +64,7 @@ const Budget = () => {
         }
     }
 
+    // fetch sekali saat mount
     useEffect(() => {
         fetchBudgets()
     }, [])
@@ -70,6 +79,7 @@ const Budget = () => {
         }
         setSubmitLoading(true)
         try {
+            // konversi ke Number karena dari select nilainya string
             await api.post('/budgets', {
                 month: Number(form.month),
                 year: Number(form.year),
@@ -77,9 +87,11 @@ const Budget = () => {
             })
             toast.success('Budget berhasil dibuat!')
             setModalOpen(false)
+            // reset ke bulan & tahun sekarang setelah simpan
             setForm({ month: now.month() + 1, year: now.year(), limit_amount: '' })
             fetchBudgets()
         } catch (error) {
+            // error message dari backend langsung ditampilkan ke user
             toast.error(error.response?.data?.data || 'Gagal membuat budget')
         } finally {
             setSubmitLoading(false)
@@ -94,6 +106,7 @@ const Budget = () => {
         }
         setSubmitLoading(true)
         try {
+            // edit budget hanya bisa ubah limit_amount, bulan & tahun ga bisa diubah
             await api.put(`/budgets/${selectedBudget.id}`, {
                 limit_amount: Number(editForm.limit_amount),
             })
@@ -119,26 +132,28 @@ const Budget = () => {
         }
     }
 
+    // buka modal edit, isi form dengan data budget yang dipilih
     const openEditModal = (b) => {
         setSelectedBudget(b)
         setEditForm({ limit_amount: b.limit_amount })
         setEditModalOpen(true)
     }
 
-    // warna progress bar berdasarkan persentase
+    // tentukan warna progress bar berdasarkan persentase pemakaian
     const getProgressColor = (pct) => {
-        if (pct >= 100) return 'bg-red-500'
-        if (pct >= 80) return 'bg-yellow-400'
-        return 'bg-green-500'
+        if (pct >= 100) return 'bg-red-500'  // over limit = merah
+        if (pct >= 80) return 'bg-yellow-400' // mendekati limit = kuning
+        return 'bg-green-500'                  // aman = hijau
     }
 
-    // status badge
+    // tentukan badge status budget untuk ditampilkan di card & tabel riwayat
     const getBadge = (b) => {
         if (b.is_over_limit) return { label: 'Over Limit', cls: 'bg-red-100 text-red-600' }
         if (b.is_warning) return { label: `${b.percentage_used}% Terpakai`, cls: 'bg-yellow-100 text-yellow-600' }
         return { label: 'Aman', cls: 'bg-green-100 text-green-600' }
     }
 
+    // pisahkan riwayat budget — bulan ini ditampilkan di card khusus di atas
     const historyBudgets = budgets.filter(b => !(b.month === now.month() + 1 && b.year === now.year()))
 
     return (
@@ -168,7 +183,7 @@ const Budget = () => {
                 </div>
             ) : (
                 <>
-                    {/* current month budget */}
+                    {/* card budget bulan ini — paling prominenyang di bagian atas */}
                     {currentBudget ? (
                         <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-50">
                             <div className="flex items-start justify-between mb-4">
@@ -179,6 +194,7 @@ const Budget = () => {
                                             {MONTHS[now.month()]} {now.year()}
                                         </span>
                                     </div>
+                                    {/* render badge status dinamis pakai IIFE supaya bisa kasih variabel lokal */}
                                     {(() => {
                                         const badge = getBadge(currentBudget)
                                         return (
@@ -198,6 +214,7 @@ const Budget = () => {
                                 </button>
                             </div>
 
+                            {/* jumlah terpakai */}
                             <p className="text-3xl font-bold text-gray-800">
                                 {formatRupiah(currentBudget.used_amount)}
                             </p>
@@ -205,7 +222,7 @@ const Budget = () => {
                                 dari {formatRupiah(currentBudget.limit_amount)} total budget
                             </p>
 
-                            {/* progress bar */}
+                            {/* progress bar — lebar diatur lewat style, warna dari getProgressColor */}
                             <div className="mt-4">
                                 <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
                                     <div
@@ -215,6 +232,7 @@ const Budget = () => {
                                 </div>
                                 <div className="flex justify-between mt-1.5">
                                     <span className="text-xs text-gray-400">Rp 0</span>
+                                    {/* label sisa berbeda kalau sudah over limit */}
                                     <span className={`text-xs font-medium ${currentBudget.is_over_limit ? 'text-red-500' : 'text-gray-500'}`}>
                                         {currentBudget.is_over_limit
                                             ? `Melebihi ${formatRupiah(Math.abs(currentBudget.remaining_amount))}`
@@ -224,7 +242,7 @@ const Budget = () => {
                                 </div>
                             </div>
 
-                            {/* stats row */}
+                            {/* 3 stat kecil di bawah progress bar */}
                             <div className="grid grid-cols-3 gap-3 mt-4 pt-4 border-t border-gray-50">
                                 <div>
                                     <p className="text-xs text-gray-400">Terpakai</p>
@@ -232,12 +250,14 @@ const Budget = () => {
                                 </div>
                                 <div>
                                     <p className="text-xs text-gray-400">Harian rata-rata</p>
+                                    {/* bagi total dengan tanggal hari ini = rata-rata harian */}
                                     <p className="font-bold text-gray-700 text-sm mt-0.5">
                                         {formatRupiah(currentBudget.used_amount / now.date())}
                                     </p>
                                 </div>
                                 <div>
                                     <p className="text-xs text-gray-400">Sisa hari</p>
+                                    {/* daysInMonth() - date() = sisa hari di bulan ini */}
                                     <p className="font-bold text-gray-700 text-sm mt-0.5">
                                         {now.daysInMonth() - now.date()} hari
                                     </p>
@@ -245,6 +265,7 @@ const Budget = () => {
                             </div>
                         </div>
                     ) : (
+                        /* tampil kalau belum ada budget bulan ini */
                         <div className="bg-white rounded-2xl p-8 shadow-sm border-2 border-dashed border-gray-200 flex flex-col items-center gap-3">
                             <RiCalendarLine size={36} className="text-gray-200" />
                             <p className="text-gray-500 text-sm font-medium">
@@ -259,7 +280,7 @@ const Budget = () => {
                         </div>
                     )}
 
-                    {/* history */}
+                    {/* tabel riwayat budget bulan-bulan sebelumnya */}
                     {historyBudgets.length > 0 && (
                         <div className="bg-white rounded-2xl shadow-sm border border-gray-50">
                             <div className="flex items-center justify-between p-5 border-b border-gray-50">
@@ -271,6 +292,7 @@ const Budget = () => {
                                     return (
                                         <div key={b.id} className="flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition-colors">
                                             <div className="flex items-center gap-4">
+                                                {/* kotak angka bulan sebagai visual penanda */}
                                                 <div className="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center">
                                                     <span className="text-xs font-bold text-gray-500">
                                                         {String(b.month).padStart(2, '0')}
@@ -294,6 +316,7 @@ const Budget = () => {
                                                         {badge.label}
                                                     </span>
                                                 </div>
+                                                {/* tombol aksi edit & hapus */}
                                                 <div className="flex items-center gap-1">
                                                     <button
                                                         onClick={() => openEditModal(b)}
@@ -321,7 +344,7 @@ const Budget = () => {
                 </>
             )}
 
-            {/* modal tambah budget */}
+            {/* modal set budget baru */}
             <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title="Set Budget Baru">
                 <form onSubmit={handleSubmit} className="space-y-4">
 
@@ -347,6 +370,7 @@ const Budget = () => {
                                 onChange={handleFormChange}
                                 className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-400"
                             >
+                                {/* kasih opsi tahun sebelumnya, sekarang, dan tahun depan */}
                                 {[now.year() - 1, now.year(), now.year() + 1].map(y => (
                                     <option key={y} value={y}>{y}</option>
                                 ))}
@@ -376,9 +400,10 @@ const Budget = () => {
                 </form>
             </Modal>
 
-            {/* modal edit budget */}
+            {/* modal edit budget — hanya bisa ubah limit_amount */}
             <Modal isOpen={editModalOpen} onClose={() => setEditModalOpen(false)} title="Ubah Budget">
                 <form onSubmit={handleEditSubmit} className="space-y-4">
+                    {/* info bulan & tahun budget yang sedang diedit */}
                     {selectedBudget && (
                         <div className="bg-gray-50 rounded-xl px-4 py-3 text-sm text-gray-600">
                             Budget untuk: <span className="font-semibold">
@@ -406,7 +431,7 @@ const Budget = () => {
                 </form>
             </Modal>
 
-            {/* modal delete */}
+            {/* modal konfirmasi hapus budget */}
             <Modal isOpen={deleteModalOpen} onClose={() => setDeleteModalOpen(false)} title="Hapus Budget">
                 <div className="text-center space-y-4">
                     <p className="text-gray-600 text-sm">

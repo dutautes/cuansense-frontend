@@ -4,7 +4,7 @@ import Modal from "../components/Modal"
 import toast from "react-hot-toast"
 import { RiAddLine, RiEditLine, RiDeleteBin6Line, RiPriceTag3Line } from "react-icons/ri"
 
-// emoji yang bisa dipilih user untuk ikon kategori
+// kumpulan emoji yang bisa dipilih user buat jadi ikon kategori
 const EMOJI_OPTIONS = [
     '🍔', '🍕', '🍜', '☕', '🛒', '🚗', '🚌', '✈️', '🏠', '💡',
     '🏥', '💊', '📚', '🎓', '🎮', '🎬', '👗', '👟', '💄', '🎁',
@@ -15,16 +15,19 @@ const EMOJI_OPTIONS = [
 const Kategori = () => {
     const [categories, setCategories] = useState([])
     const [loading, setLoading] = useState(true)
-    const [activeType, setActiveType] = useState('expense')
+    const [activeType, setActiveType] = useState('expense') // tab yang aktif: expense | income
     const [modalOpen, setModalOpen] = useState(false)
     const [editModalOpen, setEditModalOpen] = useState(false)
     const [deleteModalOpen, setDeleteModalOpen] = useState(false)
-    const [selectedCategory, setSelectedCategory] = useState(null)
+    const [selectedCategory, setSelectedCategory] = useState(null) // kategori yang lagi dipilih
     const [submitLoading, setSubmitLoading] = useState(false)
 
+    // form tambah — default icon 🏷️ sebagai placeholder generik
     const [form, setForm] = useState({ name: '', icon: '🏷️', type: 'expense' })
+    // form edit — diisi ulang saat openEditModal dipanggil
     const [editForm, setEditForm] = useState({ name: '', icon: '🏷️' })
 
+    // fetch semua kategori user dari API
     const fetchCategories = async () => {
         setLoading(true)
         try {
@@ -37,13 +40,16 @@ const Kategori = () => {
         }
     }
 
+    // cukup fetch sekali saat komponen mount
     useEffect(() => {
         fetchCategories()
     }, [])
 
-    // filter berdasarkan tab yang aktif
+    // filter kategori berdasarkan tab yang aktif — expense atau income
+    // ini computed dari state, ga perlu disimpan di state sendiri
     const filteredCategories = categories.filter(c => c.type === activeType)
 
+    // handler form generic pake computed property
     const handleFormChange = (e) => setForm({ ...form, [e.target.name]: e.target.value })
     const handleEditFormChange = (e) => setEditForm({ ...editForm, [e.target.name]: e.target.value })
 
@@ -58,10 +64,11 @@ const Kategori = () => {
             await api.post('/categories', {
                 name: form.name,
                 icon: form.icon,
-                type: form.type,
+                type: form.type, // tipe kategori ikut toggle yang dipilih di form
             })
             toast.success('Kategori berhasil ditambahkan!')
             setModalOpen(false)
+            // reset form, tapi pertahankan type sesuai tab yang aktif biar konsisten
             setForm({ name: '', icon: '🏷️', type: activeType })
             fetchCategories()
         } catch (error) {
@@ -79,6 +86,7 @@ const Kategori = () => {
         }
         setSubmitLoading(true)
         try {
+            // edit hanya bisa ubah name & icon, tipe kategori ga boleh diubah
             await api.put(`/categories/${selectedCategory.id}`, {
                 name: editForm.name,
                 icon: editForm.icon,
@@ -101,26 +109,26 @@ const Kategori = () => {
             setSelectedCategory(null)
             fetchCategories()
         } catch (error) {
+            // backend bakal tolak kalau kategori masih dipake di transaksi
             toast.error(error.response?.data?.data || 'Gagal menghapus kategori')
         }
     }
 
+    // buka modal edit, isi editForm dari data kategori yang diklik
     const openEditModal = (cat) => {
         setSelectedCategory(cat)
         setEditForm({ name: cat.name, icon: cat.icon || '🏷️' })
         setEditModalOpen(true)
     }
 
+    // buka modal tambah, sinkronkan type dengan tab yang aktif biar ga perlu pilih lagi
     const openAddModal = () => {
         setForm({ name: '', icon: '🏷️', type: activeType })
         setModalOpen(true)
     }
 
-    // pastel background berdasarkan type
-    const bgByType = (type) => type === 'income'
-        ? 'bg-green-50 border-green-100'
-        : 'bg-red-50 border-red-100'
-
+    // helper kelas background berdasarkan tipe kategori
+    // dipake di card kategori buat warna background ikon
     const iconBgByType = (type) => type === 'income'
         ? 'bg-green-100'
         : 'bg-red-100'
@@ -143,7 +151,7 @@ const Kategori = () => {
                 </button>
             </div>
 
-            {/* tab type */}
+            {/* tab filter expense / income — pill style */}
             <div className="flex gap-1 bg-gray-100 rounded-xl p-1 w-fit">
                 <button
                     onClick={() => setActiveType('expense')}
@@ -167,7 +175,7 @@ const Kategori = () => {
                 </button>
             </div>
 
-            {/* kategori grid */}
+            {/* kategori grid — 3 kondisi: loading, kosong, atau ada data */}
             {loading ? (
                 <div className="flex items-center justify-center h-48">
                     <div className="flex flex-col items-center gap-2">
@@ -193,12 +201,15 @@ const Kategori = () => {
                     {filteredCategories.map(cat => (
                         <div
                             key={cat.id}
-                            className={`bg-white rounded-2xl p-4 shadow-sm border border-gray-50 hover:shadow-md transition-shadow group`}
+                            // class 'group' buat nampilin tombol aksi pas hover
+                            className="bg-white rounded-2xl p-4 shadow-sm border border-gray-50 hover:shadow-md transition-shadow group"
                         >
                             <div className="flex items-start justify-between">
+                                {/* kotak ikon besar dengan background warna sesuai tipe */}
                                 <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl ${iconBgByType(cat.type)}`}>
                                     {cat.icon || '🏷️'}
                                 </div>
+                                {/* tombol edit & delete — opacity-0, muncul saat hover (group-hover) */}
                                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                     <button
                                         onClick={() => openEditModal(cat)}
@@ -218,6 +229,7 @@ const Kategori = () => {
                                 </div>
                             </div>
                             <p className="font-medium text-gray-700 text-sm mt-3 truncate">{cat.name}</p>
+                            {/* badge tipe kategori */}
                             <span className={`text-xs px-2 py-0.5 rounded-full mt-1 inline-block ${
                                 cat.type === 'income'
                                     ? 'bg-green-100 text-green-600'
@@ -228,7 +240,7 @@ const Kategori = () => {
                         </div>
                     ))}
 
-                    {/* card tambah */}
+                    {/* card tambah — diletakkan setelah semua kategori, jadi tombol shortcut */}
                     <button
                         onClick={openAddModal}
                         className="bg-white rounded-2xl p-4 shadow-sm border-2 border-dashed border-gray-200 hover:border-green-300 hover:bg-green-50 transition-all flex flex-col items-center justify-center gap-2 min-h-[100px] group"
@@ -241,11 +253,11 @@ const Kategori = () => {
                 </div>
             )}
 
-            {/* modal tambah */}
+            {/* modal tambah kategori */}
             <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title="Tambah Kategori">
                 <form onSubmit={handleSubmit} className="space-y-4">
 
-                    {/* toggle type */}
+                    {/* toggle tipe — expense atau income */}
                     <div className="flex rounded-xl overflow-hidden border border-gray-200">
                         <button
                             type="button"
@@ -284,15 +296,18 @@ const Kategori = () => {
                     </div>
 
                     <div>
+                        {/* preview ikon yang dipilih tampil di sebelah label */}
                         <label className="block text-sm font-medium text-gray-700 mb-2">
                             Ikon  <span className="text-lg ml-1">{form.icon}</span>
                         </label>
+                        {/* grid emoji picker — scroll kalau kepenuhan */}
                         <div className="flex flex-wrap gap-2 max-h-36 overflow-y-auto p-1">
                             {EMOJI_OPTIONS.map(emoji => (
                                 <button
                                     key={emoji}
                                     type="button"
                                     onClick={() => setForm({ ...form, icon: emoji })}
+                                    // ring hijau menandakan emoji ini yang aktif dipilih
                                     className={`w-9 h-9 text-xl rounded-lg hover:bg-gray-100 transition-colors flex items-center justify-center ${
                                         form.icon === emoji ? 'bg-green-100 ring-2 ring-green-400' : ''
                                     }`}
@@ -313,7 +328,7 @@ const Kategori = () => {
                 </form>
             </Modal>
 
-            {/* modal edit */}
+            {/* modal edit kategori — form terpisah biar ga campur aduk sama form tambah */}
             <Modal isOpen={editModalOpen} onClose={() => setEditModalOpen(false)} title="Edit Kategori">
                 <form onSubmit={handleEditSubmit} className="space-y-4">
 
@@ -346,6 +361,7 @@ const Kategori = () => {
                                 </button>
                             ))}
                         </div>
+                        {/* kasih info bahwa tipe kategori tidak bisa diubah setelah dibuat */}
                         <p className="text-xs text-gray-400 mt-2">* Tipe kategori tidak bisa diubah setelah dibuat.</p>
                     </div>
 
@@ -359,7 +375,7 @@ const Kategori = () => {
                 </form>
             </Modal>
 
-            {/* modal delete */}
+            {/* modal konfirmasi hapus — tampilkan ikon & nama kategori biar user yakin */}
             <Modal isOpen={deleteModalOpen} onClose={() => setDeleteModalOpen(false)} title="Hapus Kategori">
                 <div className="text-center space-y-4">
                     <div className="text-4xl">{selectedCategory?.icon}</div>

@@ -5,6 +5,7 @@ import toast from "react-hot-toast"
 import dayjs from "dayjs"
 import { RiAddLine, RiDeleteBin6Line, RiArrowRightLine, RiExchangeLine } from "react-icons/ri"
 
+// helper format rupiah, konsisten dipake di seluruh file
 const formatRupiah = (amount) => {
     return new Intl.NumberFormat('id-ID', {
         style: 'currency',
@@ -19,19 +20,21 @@ const Transfer = () => {
     const [loading, setLoading] = useState(true)
     const [modalOpen, setModalOpen] = useState(false)
     const [deleteModalOpen, setDeleteModalOpen] = useState(false)
-    const [selectedId, setSelectedId] = useState(null)
+    const [selectedId, setSelectedId] = useState(null) // id transfer yang mau dihapus
     const [submitLoading, setSubmitLoading] = useState(false)
     const [page, setPage] = useState(1)
     const [pagination, setPagination] = useState({})
 
+    // state form transfer, semua field default kosong kecuali tanggal
     const [form, setForm] = useState({
         from_wallet_id: '',
         to_wallet_id: '',
         amount: '',
         description: '',
-        transfer_date: dayjs().format('YYYY-MM-DD'),
+        transfer_date: dayjs().format('YYYY-MM-DD'), // default hari ini
     })
 
+    // fetch daftar transfer dengan pagination, currentPage dipake saat ganti halaman
     const fetchTransfers = async (currentPage = 1) => {
         setLoading(true)
         try {
@@ -45,6 +48,7 @@ const Transfer = () => {
         }
     }
 
+    // fetch wallet terpisah karena dibutuhkan buat form & summary card
     const fetchWallets = async () => {
         try {
             const res = await api.get('/wallets')
@@ -54,30 +58,39 @@ const Transfer = () => {
         }
     }
 
+    // jalanin fetchTransfers setiap page berubah
     useEffect(() => {
         fetchTransfers(page)
     }, [page])
 
+    // fetchWallets cukup sekali saat mount
     useEffect(() => {
         fetchWallets()
     }, [])
 
+    // generic handler form, pake computed property biar ga perlu bikin handler satu-satu
     const handleFormChange = (e) => {
         setForm({ ...form, [e.target.name]: e.target.value })
     }
 
     const handleSubmit = async (e) => {
         e.preventDefault()
+
+        // validasi dasar sebelum kirim ke API
         if (!form.from_wallet_id || !form.to_wallet_id || !form.amount || !form.transfer_date) {
             toast.error('Semua field wajib diisi!')
             return
         }
+        // cek jangan sampai transfer ke wallet yang sama
         if (form.from_wallet_id === form.to_wallet_id) {
             toast.error('Wallet asal dan tujuan tidak boleh sama!')
             return
         }
+
         setSubmitLoading(true)
         try {
+            // kirim sebagai JSON biasa (bukan FormData), karena ga ada upload file
+            // konversi id & amount ke Number karena dari input nilainya string
             await api.post('/transfers', {
                 from_wallet_id: Number(form.from_wallet_id),
                 to_wallet_id: Number(form.to_wallet_id),
@@ -87,6 +100,8 @@ const Transfer = () => {
             })
             toast.success('Transfer berhasil!')
             setModalOpen(false)
+
+            // reset form setelah berhasil
             setForm({
                 from_wallet_id: '',
                 to_wallet_id: '',
@@ -94,6 +109,8 @@ const Transfer = () => {
                 description: '',
                 transfer_date: dayjs().format('YYYY-MM-DD'),
             })
+
+            // refresh data — saldo wallet berubah setelah transfer
             fetchTransfers(page)
             fetchWallets()
         } catch (error) {
@@ -109,6 +126,7 @@ const Transfer = () => {
             toast.success('Transfer berhasil dihapus!')
             setDeleteModalOpen(false)
             setSelectedId(null)
+            // saldo kedua wallet dikembalikan otomatis di backend lewat transaction
             fetchTransfers(page)
             fetchWallets()
         } catch (error) {
@@ -116,8 +134,9 @@ const Transfer = () => {
         }
     }
 
-    // wallet yang bisa dipilih sebagai tujuan (bukan wallet asal)
+    // filter wallet tujuan — buang wallet yang sama dengan asal biar ga bisa pilih diri sendiri
     const toWalletOptions = wallets.filter(w => String(w.id) !== String(form.from_wallet_id))
+    // cari objek wallet asal buat tampilkan saldo tersedia di bawah dropdown
     const fromWallet = wallets.find(w => String(w.id) === String(form.from_wallet_id))
 
     return (
@@ -138,11 +157,12 @@ const Transfer = () => {
                 </button>
             </div>
 
-            {/* wallet summary cards */}
+            {/* wallet summary cards — cuma tampil kalau ada wallet */}
             {wallets.length > 0 && (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     {wallets.map(w => (
                         <div key={w.id} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-50">
+                            {/* kotak warna kecil dengan inisial nama wallet */}
                             <div
                                 className="w-8 h-8 rounded-lg mb-2 flex items-center justify-center text-white text-xs font-bold"
                                 style={{ backgroundColor: w.color || '#22c55e' }}
@@ -156,7 +176,7 @@ const Transfer = () => {
                 </div>
             )}
 
-            {/* tabel transfer */}
+            {/* tabel riwayat transfer */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-50 overflow-hidden">
                 {loading ? (
                     <div className="flex items-center justify-center h-48">
@@ -183,6 +203,7 @@ const Transfer = () => {
                                 <tr className="bg-gray-50 border-b border-gray-100">
                                     <th className="text-left text-xs font-semibold text-gray-500 px-5 py-3">Tanggal</th>
                                     <th className="text-left text-xs font-semibold text-gray-500 px-5 py-3">Dari</th>
+                                    {/* kolom kosong buat ikon panah di tengah */}
                                     <th className="text-center text-xs font-semibold text-gray-500 px-2 py-3"></th>
                                     <th className="text-left text-xs font-semibold text-gray-500 px-5 py-3">Ke</th>
                                     <th className="text-left text-xs font-semibold text-gray-500 px-5 py-3">Deskripsi</th>
@@ -197,6 +218,7 @@ const Transfer = () => {
                                             {dayjs(trx.transfer_date).format('DD MMM YYYY')}
                                         </td>
                                         <td className="px-5 py-3.5">
+                                            {/* kotak warna kecil + nama wallet asal */}
                                             <div className="flex items-center gap-2">
                                                 <div
                                                     className="w-6 h-6 rounded-md flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
@@ -207,10 +229,12 @@ const Transfer = () => {
                                                 <span className="text-sm text-gray-700">{trx.from_wallet?.name}</span>
                                             </div>
                                         </td>
+                                        {/* ikon panah biru penanda arah transfer */}
                                         <td className="px-2 py-3.5 text-center">
                                             <RiArrowRightLine size={16} className="text-blue-400 mx-auto" />
                                         </td>
                                         <td className="px-5 py-3.5">
+                                            {/* kotak warna kecil + nama wallet tujuan */}
                                             <div className="flex items-center gap-2">
                                                 <div
                                                     className="w-6 h-6 rounded-md flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
@@ -224,6 +248,7 @@ const Transfer = () => {
                                         <td className="px-5 py-3.5">
                                             <span className="text-sm text-gray-500">{trx.description || '-'}</span>
                                         </td>
+                                        {/* jumlah ditampilkan biru karena transfer netral (bukan income/expense) */}
                                         <td className="px-5 py-3.5 text-right">
                                             <span className="text-sm font-semibold text-blue-500">
                                                 {formatRupiah(trx.amount)}
@@ -245,7 +270,7 @@ const Transfer = () => {
                             </tbody>
                         </table>
 
-                        {/* pagination */}
+                        {/* pagination — cuma muncul kalau lebih dari 1 halaman */}
                         {pagination.total_pages > 1 && (
                             <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100">
                                 <p className="text-xs text-gray-400">Total {pagination.total_data} transfer</p>
@@ -295,6 +320,7 @@ const Transfer = () => {
                                 </option>
                             ))}
                         </select>
+                        {/* tampilkan saldo tersedia setelah wallet asal dipilih */}
                         {fromWallet && (
                             <p className="text-xs text-gray-400 mt-1">
                                 Saldo tersedia: <span className="text-green-500 font-medium">{formatRupiah(fromWallet.balance)}</span>
@@ -311,6 +337,7 @@ const Transfer = () => {
                             className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-400"
                         >
                             <option value="">Pilih wallet tujuan</option>
+                            {/* toWalletOptions udah difilter, ga akan ada wallet yang sama kayak asal */}
                             {toWalletOptions.map(w => (
                                 <option key={w.id} value={w.id}>
                                     {w.name} ({formatRupiah(w.balance)})
@@ -366,7 +393,7 @@ const Transfer = () => {
                 </form>
             </Modal>
 
-            {/* modal konfirmasi delete */}
+            {/* modal konfirmasi hapus transfer */}
             <Modal isOpen={deleteModalOpen} onClose={() => setDeleteModalOpen(false)} title="Hapus Transfer">
                 <div className="text-center space-y-4">
                     <p className="text-gray-600 text-sm">

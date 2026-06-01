@@ -7,32 +7,82 @@ import {
     RiLightbulbLine, RiLoader4Line
 } from "react-icons/ri"
 
+// nama bulan Indonesia, diakses lewat index 0-based
 const MONTHS = [
     'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
     'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
 ]
 
+// PENTING: FilterForm harus didefinisikan di LUAR komponen Export!
+// kalau di dalam, React bikin komponen baru setiap render → error hooks → blank putih
+// wallets dan yearOptions dipass sebagai props
+const FilterForm = ({ form, onChange, wallets, yearOptions }) => (
+    <div className="space-y-3 mt-5">
+        <div>
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                Source Wallet
+            </label>
+            <select
+                name="wallet_id"
+                value={form.wallet_id}
+                onChange={onChange}
+                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-400"
+            >
+                <option value="">All Wallets</option>
+                {wallets.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+            </select>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+            <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Month</label>
+                <select
+                    name="month"
+                    value={form.month}
+                    onChange={onChange}
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-400"
+                >
+                    {MONTHS.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
+                </select>
+            </div>
+            <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Year</label>
+                <select
+                    name="year"
+                    value={form.year}
+                    onChange={onChange}
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-400"
+                >
+                    {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
+                </select>
+            </div>
+        </div>
+    </div>
+)
+
 const Export = () => {
     const [wallets, setWallets] = useState([])
     const now = dayjs()
 
-    // state form excel
+    // form untuk export excel — terpisah dari pdf biar ga tabrakan state
     const [excelForm, setExcelForm] = useState({
         wallet_id: '',
-        month: now.month() + 1,
+        month: now.month() + 1, // dayjs 0-indexed, +1 biar jadi bulan yang bener
         year: now.year(),
     })
 
-    // state form pdf
+    // form untuk export pdf
     const [pdfForm, setPdfForm] = useState({
         wallet_id: '',
         month: now.month() + 1,
         year: now.year(),
     })
 
+    // loading state dipisah per tombol biar bisa download excel & pdf secara bersamaan kalau mau
     const [excelLoading, setExcelLoading] = useState(false)
     const [pdfLoading, setPdfLoading] = useState(false)
 
+    // fetch daftar wallet buat dropdown pilihan
     const fetchWallets = async () => {
         try {
             const res = await api.get('/wallets')
@@ -40,35 +90,38 @@ const Export = () => {
         } catch (_) {}
     }
 
+    // cukup fetch sekali saat komponen mount
     useEffect(() => {
         fetchWallets()
     }, [])
 
+    // handler form masing-masing — dipisah biar onChange-nya ga campur aduk
     const handleExcelChange = (e) => setExcelForm({ ...excelForm, [e.target.name]: e.target.value })
     const handlePdfChange = (e) => setPdfForm({ ...pdfForm, [e.target.name]: e.target.value })
 
     const handleDownloadExcel = async () => {
         setExcelLoading(true)
         try {
-            // pake responseType blob biar bisa download file binary
+            // bangun query params dari filter excel form
             const params = new URLSearchParams()
             if (excelForm.wallet_id) params.append('wallet_id', excelForm.wallet_id)
             params.append('month', excelForm.month)
             params.append('year', excelForm.year)
 
+            // responseType: 'blob' wajib! kalau ga, data binary bakal rusak karena dibaca sebagai teks
             const res = await api.get(`/export/excel?${params.toString()}`, {
-                responseType: 'blob', // responseType blob biar bisa download file binary
+                responseType: 'blob',
             })
 
-            // bikin link download sementara
+            // buat URL sementara dari blob, lalu trigger download lewat <a> tag
             const url = window.URL.createObjectURL(new Blob([res.data]))
             const link = document.createElement('a')
             link.href = url
             link.setAttribute('download', `cuansense-laporan-${excelForm.month}-${excelForm.year}.xlsx`)
             document.body.appendChild(link)
-            link.click()
-            link.remove()
-            window.URL.revokeObjectURL(url)
+            link.click()   // trigger download
+            link.remove()  // bersihin elemen setelah klik
+            window.URL.revokeObjectURL(url) // buang URL blob biar ga memory leak
 
             toast.success('Excel berhasil didownload!')
         } catch (error) {
@@ -86,6 +139,7 @@ const Export = () => {
             params.append('month', pdfForm.month)
             params.append('year', pdfForm.year)
 
+            // sama kayak excel tapi MIME type-nya application/pdf biar browser bisa detect dengan bener
             const res = await api.get(`/export/pdf?${params.toString()}`, {
                 responseType: 'blob',
             })
@@ -107,51 +161,8 @@ const Export = () => {
         }
     }
 
+    // opsi tahun yang tampil di dropdown — 2 tahun lalu sampai tahun depan
     const yearOptions = [now.year() - 2, now.year() - 1, now.year(), now.year() + 1]
-
-    const FilterForm = ({ form, onChange, type }) => (
-        <div className="space-y-3 mt-5">
-            <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-                    Source Wallet
-                </label>
-                <select
-                    name="wallet_id"
-                    value={form.wallet_id}
-                    onChange={onChange}
-                    className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-400"
-                >
-                    <option value="">All Wallets</option>
-                    {wallets.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
-                </select>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-                <div>
-                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Month</label>
-                    <select
-                        name="month"
-                        value={form.month}
-                        onChange={onChange}
-                        className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-400"
-                    >
-                        {MONTHS.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
-                    </select>
-                </div>
-                <div>
-                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Year</label>
-                    <select
-                        name="year"
-                        value={form.year}
-                        onChange={onChange}
-                        className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-400"
-                    >
-                        {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
-                    </select>
-                </div>
-            </div>
-        </div>
-    )
 
     return (
         <div className="space-y-6">
@@ -166,10 +177,10 @@ const Export = () => {
                 </p>
             </div>
 
-            {/* export cards */}
+            {/* 2 card export — Excel hijau & PDF merah */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
 
-                {/* excel card */}
+                {/* card download excel */}
                 <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-50">
                     <div className="flex items-center gap-3 mb-1">
                         <div className="w-10 h-10 bg-green-50 rounded-xl flex items-center justify-center">
@@ -181,8 +192,10 @@ const Export = () => {
                         </div>
                     </div>
 
-                    <FilterForm form={excelForm} onChange={handleExcelChange} type="excel" />
+                    {/* pass wallets & yearOptions lewat props ke FilterForm */}
+                    <FilterForm form={excelForm} onChange={handleExcelChange} wallets={wallets} yearOptions={yearOptions} />
 
+                    {/* tombol download — disabled dan tampil spinner saat loading */}
                     <button
                         onClick={handleDownloadExcel}
                         disabled={excelLoading}
@@ -195,7 +208,7 @@ const Export = () => {
                     </button>
                 </div>
 
-                {/* pdf card */}
+                {/* card download pdf */}
                 <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-50">
                     <div className="flex items-center gap-3 mb-1">
                         <div className="w-10 h-10 bg-red-50 rounded-xl flex items-center justify-center">
@@ -207,7 +220,7 @@ const Export = () => {
                         </div>
                     </div>
 
-                    <FilterForm form={pdfForm} onChange={handlePdfChange} type="pdf" />
+                    <FilterForm form={pdfForm} onChange={handlePdfChange} wallets={wallets} yearOptions={yearOptions} />
 
                     <button
                         onClick={handleDownloadPdf}
@@ -222,7 +235,7 @@ const Export = () => {
                 </div>
             </div>
 
-            {/* pro tip */}
+            {/* tips penggunaan — info statis buat bantu user pilih format yang sesuai */}
             <div className="bg-green-50 rounded-2xl p-4 flex items-start gap-3">
                 <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
                     <RiLightbulbLine size={16} className="text-green-600" />
