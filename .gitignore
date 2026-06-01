@@ -1,0 +1,4 @@
+node_modules/
+.flowbite-react/
+dist/ 
+# dist/ : folder hasil build, 
